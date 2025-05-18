@@ -1,4 +1,3 @@
-import Image from "next/image";
 import RefreshButton from "../components/RefreshButton";
 import RegionTabs from "../components/RegionTabs";
 import { BarChartGradient } from "../components/BarChartGradient";
