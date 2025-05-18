@@ -243,34 +243,33 @@ export default async function Home({
         }
         const data: ApiResponse = await response.json();
         const currentRegionParties = data.currentResults?.resultsParty || [];
-        const mandatesToRunDhondtOnThisRegion = data.currentResults?.availableMandates || 0;
 
-        const simulatedMandatesInThisRegionByParty = calculateMandatesForRegion(
-          currentRegionParties,
-          mandatesToRunDhondtOnThisRegion
-        );
+        // Determine total physical mandates for this specific region
+        const apiAvailableMandatesInThisRegion = data.currentResults?.availableMandates || 0;
+        const apiAttributedMandatesInThisRegion = data.currentResults?.totalMandates || 0; // API's 'totalMandates' means attributed
+        const totalPhysicalMandatesForThisSpecificRegion =
+          apiAvailableMandatesInThisRegion + apiAttributedMandatesInThisRegion;
 
-        const allPartyAcronymsInThisRegion = new Set<string>();
-        currentRegionParties.forEach((p) => allPartyAcronymsInThisRegion.add(p.acronym));
-        Object.keys(simulatedMandatesInThisRegionByParty).forEach((p) =>
-          allPartyAcronymsInThisRegion.add(p)
-        );
+        if (currentRegionParties.length > 0 && totalPhysicalMandatesForThisSpecificRegion > 0) {
+          // Calculate mandates for this region based on its total physical capacity and local votes
+          const mandatesWonInThisRegionCompletelyByDhondt = calculateMandatesForRegion(
+            currentRegionParties, // Contains vote data for parties in this region
+            totalPhysicalMandatesForThisSpecificRegion // Total mandates to allocate for this region using D'Hondt
+          );
 
-        allPartyAcronymsInThisRegion.forEach((partyAcronym) => {
-          const attributedInRegion =
-            currentRegionParties.find((p) => p.acronym === partyAcronym)?.mandates || 0;
-          const simulatedInRegion = simulatedMandatesInThisRegionByParty[partyAcronym] || 0;
-          const totalPhysicalForPartyInRegion = attributedInRegion + simulatedInRegion;
-
-          if (totalPhysicalForPartyInRegion > 0) {
-            aggregatedTotalPhysicalMandatesByParty.set(
-              partyAcronym,
-              (aggregatedTotalPhysicalMandatesByParty.get(partyAcronym) || 0) +
-                totalPhysicalForPartyInRegion
-            );
-          }
-        });
-        return data;
+          // Aggregate the results
+          Object.entries(mandatesWonInThisRegionCompletelyByDhondt).forEach(
+            ([partyAcronym, numMandates]) => {
+              if (numMandates > 0) {
+                aggregatedTotalPhysicalMandatesByParty.set(
+                  partyAcronym,
+                  (aggregatedTotalPhysicalMandatesByParty.get(partyAcronym) || 0) + numMandates
+                );
+              }
+            }
+          );
+        }
+        return data; // The returned data here isn't strictly used by Promise.all consumer
       } catch (error) {
         console.error(
           `Error fetching/processing data for ${region.name} (TOTAL view aggregation):`,
@@ -334,7 +333,6 @@ export default async function Home({
           mandatesForSimInCurrentView = apiAvailableMandates;
           attributedMandatesInCurrentView = apiAttributedMandates;
           totalPhysicalMandatesInCurrentView = apiAvailableMandates + apiAttributedMandates;
-          // Update voter stats from fresh API data for the current region
           currentNumberVoters = data.currentResults.numberVoters || 0;
           currentSubscribedVoters = data.currentResults.subscribedVoters || 0;
         } else {
@@ -348,37 +346,20 @@ export default async function Home({
       console.error(`Error fetching or processing election data for ${activeTerritoryKey}:`, error);
     }
 
-    const simulatedMandatesByParty: { [key: string]: number } = calculateMandatesForRegion(
-      freshResultsParty,
-      mandatesForSimInCurrentView
+    // Calculate mandates for the bar chart based on a D'Hondt run for ALL totalPhysicalMandatesInCurrentView.
+    // This ensures the bar chart reflects the sum of (dark green + light green) cells in the D'Hondt table.
+    const mandatesMatchingTableGreenCells = calculateMandatesForRegion(
+      freshResultsParty, // Contains the votes needed for calculation
+      totalPhysicalMandatesInCurrentView // Use the total mandates for this region
     );
 
-    const finalMandatesForBarChart = new Map<string, number>();
-    const allPartyAcronymsInRegion = new Set<string>();
-
-    freshResultsParty.forEach((party) => {
-      finalMandatesForBarChart.set(
-        party.acronym,
-        (finalMandatesForBarChart.get(party.acronym) || 0) + (party.mandates || 0)
-      );
-      allPartyAcronymsInRegion.add(party.acronym);
-    });
-
-    for (const [partyAcronym, numSimulatedMandates] of Object.entries(simulatedMandatesByParty)) {
-      finalMandatesForBarChart.set(
-        partyAcronym,
-        (finalMandatesForBarChart.get(partyAcronym) || 0) + numSimulatedMandates
-      );
-      allPartyAcronymsInRegion.add(partyAcronym);
-    }
-
-    regionalDhondtBarChartData = Array.from(allPartyAcronymsInRegion)
-      .map((acronym) => ({
+    regionalDhondtBarChartData = Object.entries(mandatesMatchingTableGreenCells)
+      .map(([acronym, count]) => ({
         key: acronym,
-        value: finalMandatesForBarChart.get(acronym) || 0,
+        value: count,
         color: partyHexColors[acronym] || fallbackColor,
       }))
-      .filter((item) => item.value > 0)
+      .filter((item) => item.value > 0) // Only include parties that won at least one mandate
       .sort((a, b) => b.value - a.value);
   }
 
