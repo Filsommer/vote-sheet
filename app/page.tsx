@@ -189,12 +189,13 @@ export default async function Home({
     enrichedRegions.find((r) => r.territoryKey === activeTerritoryKey) || enrichedRegions[0];
 
   if (isTotalViewActive) {
-    territoryFullName = "Total (Sum of Simulated Regional Mandates)";
+    territoryFullName = "Total (National Results)";
     mandatesForSimInCurrentView = activeRegionDetailsFromTabs?.mandatesForSim || 0;
     attributedMandatesInCurrentView = activeRegionDetailsFromTabs?.attributedMandates || 0;
     totalPhysicalMandatesInCurrentView = activeRegionDetailsFromTabs?.totalPhysicalMandates || 0;
 
-    const aggregatedMandatesByParty = new Map<string, number>();
+    const aggregatedTotalPhysicalMandatesByParty = new Map<string, number>();
+
     const allRegionDataPromises = initialRegions.map(async (region) => {
       try {
         const response = await fetch(
@@ -211,18 +212,31 @@ export default async function Home({
         const currentRegionParties = data.currentResults?.resultsParty || [];
         const mandatesToRunDhondtOnThisRegion = data.currentResults?.availableMandates || 0;
 
-        if (currentRegionParties.length > 0 && mandatesToRunDhondtOnThisRegion > 0) {
-          const mandatesInThisRegion = calculateMandatesForRegion(
-            currentRegionParties,
-            mandatesToRunDhondtOnThisRegion
-          );
-          for (const [partyAcronym, numMandates] of Object.entries(mandatesInThisRegion)) {
-            aggregatedMandatesByParty.set(
+        const simulatedMandatesInThisRegionByParty = calculateMandatesForRegion(
+          currentRegionParties,
+          mandatesToRunDhondtOnThisRegion
+        );
+
+        const allPartyAcronymsInThisRegion = new Set<string>();
+        currentRegionParties.forEach((p) => allPartyAcronymsInThisRegion.add(p.acronym));
+        Object.keys(simulatedMandatesInThisRegionByParty).forEach((p) =>
+          allPartyAcronymsInThisRegion.add(p)
+        );
+
+        allPartyAcronymsInThisRegion.forEach((partyAcronym) => {
+          const attributedInRegion =
+            currentRegionParties.find((p) => p.acronym === partyAcronym)?.mandates || 0;
+          const simulatedInRegion = simulatedMandatesInThisRegionByParty[partyAcronym] || 0;
+          const totalPhysicalForPartyInRegion = attributedInRegion + simulatedInRegion;
+
+          if (totalPhysicalForPartyInRegion > 0) {
+            aggregatedTotalPhysicalMandatesByParty.set(
               partyAcronym,
-              (aggregatedMandatesByParty.get(partyAcronym) || 0) + numMandates
+              (aggregatedTotalPhysicalMandatesByParty.get(partyAcronym) || 0) +
+                totalPhysicalForPartyInRegion
             );
           }
-        }
+        });
         return data;
       } catch (error) {
         console.error(
@@ -234,9 +248,10 @@ export default async function Home({
     });
     await Promise.all(allRegionDataPromises);
 
-    totalTabChartDataSource = Array.from(aggregatedMandatesByParty.entries())
+    totalTabChartDataSource = Array.from(aggregatedTotalPhysicalMandatesByParty.entries())
       .map(([key, value]) => ({ key, value, color: partyHexColors[key] || fallbackColor }))
       .sort((a, b) => b.value - a.value);
+
     parties = totalTabChartDataSource.map((item) => ({
       acronym: item.key,
       votes: 0,
@@ -468,8 +483,7 @@ export default async function Home({
           <div className="my-8 p-3 sm:p-4 border border-gray-300 rounded-lg shadow bg-white">
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start items-center mb-6 gap-3 sm:gap-0">
               <h2 className="text-xl sm:text-2xl font-semibold text-gray-800 text-center sm:text-left">
-                {territoryFullName} ({totalPhysicalMandatesInCurrentView} Total Physical Mandates
-                Nationally)
+                {territoryFullName} ({totalPhysicalMandatesInCurrentView} Mandates Nationally)
               </h2>
               <RefreshButton />
             </div>
@@ -479,8 +493,8 @@ export default async function Home({
                 height={dynamicBarChartHeightClass}
               />
               <p className="text-xs text-gray-600 mt-2 text-center">
-                Chart shows sum of mandates obtained by each party from D&apos;Hondt simulation in
-                each respective region, using {mandatesForSimInCurrentView} total simulatable
+                Chart shows total physical mandates (API-attributed + simulated) obtained by each
+                party across all regions. This sums to {totalPhysicalMandatesInCurrentView} total
                 mandates nationally.
               </p>
             </div>
