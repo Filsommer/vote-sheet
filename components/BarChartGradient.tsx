@@ -109,11 +109,7 @@ export function BarChartGradient({ data, height = "h-72" }: BarChartGradientProp
         {/* SVG for grid lines and X-axis text */}
         <svg className="h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
           {xScale.ticks(Math.min(8, d3Max(sortedData, (d) => d.value) ?? 1)).map((tickValue, i) => (
-            <g
-              transform={`translate(${xScale(tickValue)},0)`}
-              className="text-gray-300/80 dark:text-gray-800/80"
-              key={i}
-            >
+            <g transform={`translate(${xScale(tickValue)},0)`} className="text-gray-300/80" key={i}>
               <line
                 y1={0}
                 y2={100}
