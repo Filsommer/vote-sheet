@@ -749,7 +749,7 @@ export default async function Home({
       <footer className="flex gap-[24px] flex-wrap items-center justify-center pt-10">
         <a
           className="flex items-center gap-1.5 hover:underline hover:underline-offset-4"
-          href="https://github.com/FelixSommer/rosen-charts-expo"
+          href="https://github.com/Filsommer/vote-sheet/"
           target="_blank"
           rel="noopener noreferrer"
         >
