@@ -62,18 +62,21 @@ interface ApiResponse {
   currentResults?: {
     resultsParty?: PartyData[];
     territoryFullName?: string;
-    availableMandates?: number; // Mandates available for D'Hondt simulation
-    totalMandates?: number; // Mandates ALREADY ATTRIBUTED/FILLED (as per new understanding)
-    // Let's treat this as `attributedMandatesInApi` internally when fetching
+    availableMandates?: number;
+    totalMandates?: number;
+    numberVoters?: number;
+    subscribedVoters?: number;
   };
 }
 
 interface RegionInfo {
   name: string;
   territoryKey: string;
-  mandatesForSim: number; // Mandates to be simulated (from API's availableMandates)
-  attributedMandates: number; // Mandates already attributed (from API's totalMandates)
-  totalPhysicalMandates: number; // Sum of the above, for tab label display
+  mandatesForSim: number;
+  attributedMandates: number;
+  totalPhysicalMandates: number;
+  numberVotersInRegion?: number;
+  subscribedVotersInRegion?: number;
 }
 
 async function getRegionsWithMandates(
@@ -82,6 +85,8 @@ async function getRegionsWithMandates(
   let sumOfMandatesForSim_AllRegions = 0;
   let sumOfAttributedMandates_AllRegions = 0;
   let sumOfTotalPhysicalMandates_AllRegions = 0;
+  let sumOfNumberVoters_AllRegions = 0;
+  let sumOfSubscribedVoters_AllRegions = 0;
 
   const regionsWithMandatesPromises = baseRegions.map(async (region) => {
     try {
@@ -91,22 +96,40 @@ async function getRegionsWithMandates(
       );
       if (!response.ok) {
         console.error(`Failed to fetch mandate data for ${region.name}: ${response.status}`);
-        return { ...region, mandatesForSim: 0, attributedMandates: 0, totalPhysicalMandates: 0 };
+        return {
+          ...region,
+          mandatesForSim: 0,
+          attributedMandates: 0,
+          totalPhysicalMandates: 0,
+          numberVotersInRegion: 0,
+          subscribedVotersInRegion: 0,
+        };
       }
       const data: ApiResponse = await response.json();
-      const mandatesForSim = data.currentResults?.availableMandates || 0; // These are for D'Hondt
-      const attributedMandatesInApi = data.currentResults?.totalMandates || 0; // These are pre-filled
+      const mandatesForSim = data.currentResults?.availableMandates || 0;
+      const attributedMandatesInApi = data.currentResults?.totalMandates || 0;
       const totalPhysicalMandates = mandatesForSim + attributedMandatesInApi;
+      const numberVotersInRegion = data.currentResults?.numberVoters || 0;
+      const subscribedVotersInRegion = data.currentResults?.subscribedVoters || 0;
 
       return {
         ...region,
         mandatesForSim: mandatesForSim,
         attributedMandates: attributedMandatesInApi,
         totalPhysicalMandates: totalPhysicalMandates,
+        numberVotersInRegion: numberVotersInRegion,
+        subscribedVotersInRegion: subscribedVotersInRegion,
       };
     } catch (e) {
       console.error(`Error fetching mandate data for ${region.name}:`, e);
-      return { ...region, mandatesForSim: 0, attributedMandates: 0, totalPhysicalMandates: 0 };
+      return {
+        ...region,
+        mandatesForSim: 0,
+        attributedMandates: 0,
+        totalPhysicalMandates: 0,
+        numberVotersInRegion: 0,
+        subscribedVotersInRegion: 0,
+      };
     }
   });
 
@@ -116,6 +139,8 @@ async function getRegionsWithMandates(
     sumOfMandatesForSim_AllRegions += region.mandatesForSim;
     sumOfAttributedMandates_AllRegions += region.attributedMandates;
     sumOfTotalPhysicalMandates_AllRegions += region.totalPhysicalMandates;
+    sumOfNumberVoters_AllRegions += region.numberVotersInRegion || 0;
+    sumOfSubscribedVoters_AllRegions += region.subscribedVotersInRegion || 0;
   });
 
   // Sort by total physical mandates for tab order
@@ -124,9 +149,11 @@ async function getRegionsWithMandates(
   const totalRegionTab: RegionInfo = {
     name: "Total",
     territoryKey: "TOTAL",
-    mandatesForSim: sumOfMandatesForSim_AllRegions, // Sum of what will be simulated across regions
-    attributedMandates: sumOfAttributedMandates_AllRegions, // Sum of what was pre-attributed across regions
-    totalPhysicalMandates: sumOfTotalPhysicalMandates_AllRegions, // Grand total physical mandates for the "Total" tab label
+    mandatesForSim: sumOfMandatesForSim_AllRegions,
+    attributedMandates: sumOfAttributedMandates_AllRegions,
+    totalPhysicalMandates: sumOfTotalPhysicalMandates_AllRegions,
+    numberVotersInRegion: sumOfNumberVoters_AllRegions,
+    subscribedVotersInRegion: sumOfSubscribedVoters_AllRegions,
   };
 
   return [totalRegionTab, ...resolvedRegions];
@@ -185,6 +212,10 @@ export default async function Home({
   let totalTabChartDataSource: Array<{ key: string; value: number; color: string }> = [];
   let regionalDhondtBarChartData: Array<{ key: string; value: number; color: string }> = [];
 
+  // Add state for voter stats in the current view
+  let currentNumberVoters = 0;
+  let currentSubscribedVoters = 0;
+
   const activeRegionDetailsFromTabs =
     enrichedRegions.find((r) => r.territoryKey === activeTerritoryKey) || enrichedRegions[0];
 
@@ -193,6 +224,9 @@ export default async function Home({
     mandatesForSimInCurrentView = activeRegionDetailsFromTabs?.mandatesForSim || 0;
     attributedMandatesInCurrentView = activeRegionDetailsFromTabs?.attributedMandates || 0;
     totalPhysicalMandatesInCurrentView = activeRegionDetailsFromTabs?.totalPhysicalMandates || 0;
+    // Populate voter stats for Total view from the pre-aggregated RegionInfo
+    currentNumberVoters = activeRegionDetailsFromTabs?.numberVotersInRegion || 0;
+    currentSubscribedVoters = activeRegionDetailsFromTabs?.subscribedVotersInRegion || 0;
 
     const aggregatedTotalPhysicalMandatesByParty = new Map<string, number>();
 
@@ -269,6 +303,9 @@ export default async function Home({
     mandatesForSimInCurrentView = activeRegionDetailsFromTabs?.mandatesForSim || 0;
     attributedMandatesInCurrentView = activeRegionDetailsFromTabs?.attributedMandates || 0;
     totalPhysicalMandatesInCurrentView = activeRegionDetailsFromTabs?.totalPhysicalMandates || 0;
+    // Initialize voter stats from tab data (could be stale, will be updated)
+    currentNumberVoters = activeRegionDetailsFromTabs?.numberVotersInRegion || 0;
+    currentSubscribedVoters = activeRegionDetailsFromTabs?.subscribedVotersInRegion || 0;
     yAxisLength = 20;
 
     let freshResultsParty: PartyData[] = [];
@@ -298,6 +335,9 @@ export default async function Home({
           mandatesForSimInCurrentView = apiAvailableMandates;
           attributedMandatesInCurrentView = apiAttributedMandates;
           totalPhysicalMandatesInCurrentView = apiAvailableMandates + apiAttributedMandates;
+          // Update voter stats from fresh API data for the current region
+          currentNumberVoters = data.currentResults.numberVoters || 0;
+          currentSubscribedVoters = data.currentResults.subscribedVoters || 0;
         } else {
           console.error(
             `Election data for ${activeTerritoryKey} is not in the expected format:`,
@@ -468,12 +508,29 @@ export default async function Home({
   const contenderIndex1 = totalPhysicalMandatesInCurrentView;
   const contenderIndex2 = totalPhysicalMandatesInCurrentView + 1;
 
+  // Calculate turnout for display
+  const turnoutPercentage =
+    currentSubscribedVoters > 0
+      ? ((currentNumberVoters / currentSubscribedVoters) * 100).toFixed(2)
+      : "N/A";
+
   return (
     <div className="min-h-screen p-4 pb-20 font-[family-name:var(--font-geist-sans)]">
       <main className="w-full max-w-7xl mx-auto p-2 sm:p-4">
-        <h1 className="text-2xl sm:text-3xl font-bold text-center mb-6 sm:mb-8 text-gray-800">
+        <h1 className="text-2xl sm:text-3xl font-bold text-center mb-2 text-gray-800">
           Legislativas 2025 - Vote Allocation
         </h1>
+        {/* Sub-header for voter stats */}
+        <div className="text-center text-sm text-gray-600 mb-6 sm:mb-8">
+          <span>Voters: {currentNumberVoters.toLocaleString()}</span>
+          <span className="mx-2">|</span>
+          <span>Subscribed: {currentSubscribedVoters.toLocaleString()}</span>
+          <span className="mx-2">|</span>
+          <span>
+            Turnout: {turnoutPercentage}
+            {turnoutPercentage !== "N/A" ? "%" : ""}
+          </span>
+        </div>
         <RegionTabs
           regions={enrichedRegions.map((r) => ({ ...r, displayMandates: r.totalPhysicalMandates }))}
           activeTerritoryKey={activeTerritoryKey}
