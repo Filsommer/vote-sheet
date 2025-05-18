@@ -219,7 +219,7 @@ export default async function Home({
     enrichedRegions.find((r) => r.territoryKey === activeTerritoryKey) || enrichedRegions[0];
 
   if (isTotalViewActive) {
-    territoryFullName = "Total (National Results)";
+    territoryFullName = "National Results";
     mandatesForSimInCurrentView = activeRegionDetailsFromTabs?.mandatesForSim || 0;
     attributedMandatesInCurrentView = activeRegionDetailsFromTabs?.attributedMandates || 0;
     totalPhysicalMandatesInCurrentView = activeRegionDetailsFromTabs?.totalPhysicalMandates || 0;
@@ -520,7 +520,7 @@ export default async function Home({
           <div className="my-8 p-3 sm:p-4 border border-gray-300 rounded-lg shadow bg-white">
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start items-center mb-6 gap-3 sm:gap-0">
               <h2 className="text-xl sm:text-2xl font-semibold text-gray-800 text-center sm:text-left">
-                {territoryFullName} ({totalPhysicalMandatesInCurrentView} Mandates Nationally)
+                {territoryFullName} ({totalPhysicalMandatesInCurrentView} Mandates)
               </h2>
               <RefreshButton />
             </div>
