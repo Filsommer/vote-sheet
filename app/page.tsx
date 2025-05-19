@@ -9,7 +9,7 @@ export default function Home() {
             Voting Period Has Ended
           </h1>
           <p className="text-xl text-gray-600 mb-6">
-            Thank you for following the election results! We'll be back in 4 years 😊
+            Thank you for following the election results! We&apos;ll be back in 4 years 😊
           </p>
         </div>
       </main>
